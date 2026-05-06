@@ -49,28 +49,17 @@ const (
 )
 
 // spotifyPlaylistItem is the raw playlist object returned by /v1/me/playlists.
+// owner.id is used to label playlists as "Your playlists" vs "Followed playlists".
 type spotifyPlaylistItem struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	SnapshotID    string `json:"snapshot_id"`
-	Collaborative bool   `json:"collaborative"`
-	Owner         struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	SnapshotID string `json:"snapshot_id"`
+	Owner      struct {
 		ID string `json:"id"`
 	} `json:"owner"`
 	Items *struct {
 		Total int `json:"total"`
 	} `json:"items"`
-}
-
-// playlistAccessible reports whether the playlist should be shown to the user.
-// Playlists saved from other users (not owned, not collaborative) are excluded
-// because the Spotify API returns 403 when listing their tracks.
-// When userID is empty (fetch failed), all playlists are included as a fallback.
-func playlistAccessible(item spotifyPlaylistItem, userID string) bool {
-	if userID == "" {
-		return true
-	}
-	return item.Owner.ID == userID || item.Collaborative
 }
 
 // SpotifyProvider implements playlist.Provider using the Spotify Web API
@@ -217,10 +206,11 @@ func (p *SpotifyProvider) currentUserID(ctx context.Context) string {
 	return me.ID
 }
 
-// Playlists returns the authenticated user's Spotify playlists.
-// Only playlists owned by the user or marked as collaborative are returned;
-// playlists saved from other users are excluded because the Spotify API
-// returns 403 when trying to list their tracks.
+// Playlists returns the authenticated user's Spotify playlists, grouped into
+// "Your playlists" (owned) and "Followed playlists" (saved from other users).
+// Spotify-owned editorial/algorithmic playlists (e.g. Deep Focus) may appear
+// in the followed list but fail at track-fetch time for developer apps
+// registered after 2024-11-27 — Tracks() surfaces a clear error in that case.
 func (p *SpotifyProvider) Playlists() ([]playlist.PlaylistInfo, error) {
 	if err := p.ensureSession(); err != nil {
 		return nil, err
@@ -237,7 +227,7 @@ func (p *SpotifyProvider) Playlists() ([]playlist.PlaylistInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	userID := p.currentUserID(ctx) // empty string if fetch fails → no filtering
+	userID := p.currentUserID(ctx) // empty string if fetch fails → all tagged as followed
 
 	var all []playlist.PlaylistInfo
 	offset := 0
@@ -274,8 +264,8 @@ func (p *SpotifyProvider) Playlists() ([]playlist.PlaylistInfo, error) {
 		query := url.Values{
 			"limit":  {fmt.Sprintf("%d", limit)},
 			"offset": {fmt.Sprintf("%d", offset)},
-			// Include owner.id and collaborative to filter inaccessible playlists.
-			"fields": {"items(id,name,snapshot_id,collaborative,owner(id),items.total),total"},
+			// owner.id is used to label playlists as owned vs followed.
+			"fields": {"items(id,name,snapshot_id,owner(id),items.total),total"},
 		}
 
 		resp, err := p.webAPI(ctx, "GET", "/v1/me/playlists", query)
@@ -293,9 +283,6 @@ func (p *SpotifyProvider) Playlists() ([]playlist.PlaylistInfo, error) {
 
 		p.mu.Lock()
 		for _, item := range result.Items {
-			if !playlistAccessible(item, userID) {
-				continue
-			}
 			count := 0
 			if item.Items != nil {
 				count = item.Items.Total
@@ -413,7 +400,11 @@ func (p *SpotifyProvider) Tracks(playlistID string) ([]playlist.Track, error) {
 
 		if err != nil {
 			if strings.Contains(err.Error(), "403") {
-				return nil, fmt.Errorf("spotify: playlist not accessible: only playlists you own or collaborate on can be loaded")
+				// Spotify restricts editorial/algorithmic playlists (Deep Focus,
+				// Discover Weekly, etc.) for developer apps registered after
+				// 2024-11-27 unless they hold extended quota mode access.
+				// See https://developer.spotify.com/blog/2024-11-27-changes-to-the-web-api
+				return nil, fmt.Errorf("spotify: playlist unavailable to this app — likely a Spotify-owned editorial/algorithmic playlist (restricted for newer developer apps)")
 			}
 			return nil, fmt.Errorf("spotify: list tracks: %w", err)
 		}
