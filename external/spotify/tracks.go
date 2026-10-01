@@ -44,7 +44,11 @@ func (p *SpotifyProvider) Tracks(playlistID string) ([]playlist.Track, error) {
 	}
 
 	if albumID, ok := isSavedAlbumID(playlistID); ok {
-		return p.AlbumTracks(albumID)
+		tracks, err := p.AlbumTracks(albumID)
+		if err != nil {
+			return nil, fmt.Errorf("spotify: list saved album tracks: %w", err)
+		}
+		return tracks, nil
 	}
 	// Check cache — if we have tracks and the snapshot_id hasn't changed, return cached.
 	p.mu.Lock()
@@ -243,7 +247,10 @@ func (p *SpotifyProvider) TracksPage(playlistID string, offset int) ([]playlist.
 	// leaving them out here would build a playlist-items URL from an album ID.
 	if albumID, ok := isSavedAlbumID(playlistID); ok {
 		tracks, err := p.AlbumTracks(albumID)
-		return tracks, 0, err
+		if err != nil {
+			return nil, 0, fmt.Errorf("spotify: list saved album tracks: %w", err)
+		}
+		return tracks, 0, nil
 	}
 	p.mu.Lock()
 	var tracks []playlist.Track
