@@ -62,7 +62,7 @@ Sign-in therefore completes two authorization steps in one browser tab.
 
 > **Shared quota:** Extended Quota Mode has a far higher rate limit than a Development Mode app, but it is still a pool shared with other ncspot and spotify-player users, and Spotify applies quota per `client_id` globally. Cliamp retries `429 Too Many Requests` with exponential backoff.
 >
-> **Borrowed identity:** neither built-in `client_id` belongs to cliamp. This is the same bet ncspot and spotify-player already make, but if Spotify clamps or revokes either one, every cliamp user on the default is affected at once. The fallback is to [register your own app](#advanced-bring-your-own-client-id) and set `client_id`, accepting the Development Mode restrictions.
+> **Borrowed identity:** neither built-in `client_id` belongs to cliamp. This is the same bet ncspot and spotify-player already make, but if Spotify clamps or revokes either one, every cliamp user on the default is affected at once. If the Web API identity is the one affected, the fallback is to [register your own app](#advanced-bring-your-own-client-id) and set `client_id`, accepting the Development Mode restrictions. A custom `client_id` replaces only the Web API identity: playback always authorizes through keymaster, so losing keymaster breaks playback regardless of `client_id` and needs a fix in cliamp.
 
 ## Usage
 
@@ -92,7 +92,7 @@ Large playlists fill in as they load. Cliamp shows the first tracks, appends the
 
 The provider lists both playlists and saved albums in the Spotify library. Playlists include those you created and saved, or followed. If a public playlist is missing, open Spotify and click **Save** first.
 
-Spotify lets apps read the tracks of only the playlists that you own or collaborate on. A followed playlist can fail to open with `403`. To play it, add its tracks to your own playlist in Spotify.
+Development Mode apps can read the tracks of only the playlists that you own or collaborate on. The built-in Extended Quota Mode `client_id` is not subject to this restriction. If you set your own `client_id`, a followed playlist can fail to open with `403`. To play it, remove `client_id` to use the built-in identity, or add its tracks to your own playlist in Spotify.
 
 Saved albums appear under a **Saved albums** section, labelled `Artist - Album` and sorted alphabetically by artist. These are the albums in **Your Library**. To add one, open the album in Spotify and click **Save**. Selecting a saved album loads all of its tracks in disc and track order.
 

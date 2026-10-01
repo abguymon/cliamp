@@ -119,7 +119,7 @@ func (p *SpotifyProvider) fetchTracksPage(ctx context.Context, playlistID string
 	resp, err := p.webAPI(ctx, "GET", path, query)
 	if err != nil {
 		if playlistID != savedTracksPlaylistID && hasStatus(err, http.StatusForbidden) {
-			return nil, 0, fmt.Errorf("spotify: Spotify lets apps read only playlists you own or collaborate on. Add the tracks to your own playlist in Spotify, then open that playlist: %w", err)
+			return nil, 0, fmt.Errorf("spotify: Development Mode apps can read only playlists you own or collaborate on. Remove client_id from [spotify] to use the built-in client, or add the tracks to your own playlist in Spotify: %w", err)
 		}
 		return nil, 0, fmt.Errorf("spotify: list tracks: %w", err)
 	}
